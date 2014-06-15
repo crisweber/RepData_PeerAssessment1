@@ -2,19 +2,100 @@
 
 
 ## Loading and preprocessing the data
-
-
+```{r,results='hide'}
+setwd("~/Documents/DataScienceSpecialization/ReproducibleResearch/RepData_PeerAssessment1")
+activities = read.csv("data/activity.csv")
+activities$date = as.Date(activities$date)
+```
 
 ## What is mean total number of steps taken per day?
+```{r,warning=FALSE}
+library(ggplot2)
+dailyActivities = aggregate(steps ~ date, activities, sum)
+m = ggplot(dailyActivities, aes(steps))
+m + geom_histogram(binwidth=1500, fill="darkgreen", color="black") + 
+    ggtitle("Daily steps distribution") + 
+    theme(plot.title = element_text(lineheight=0.9, face="bold", size=16)) + 
+    scale_y_continuous(name="Count", breaks=0:10*1) +
+    scale_x_continuous(name="Steps", breaks=0:24000*3000)
+```
 
+```{r,echo=FALSE}
+mean_steps = mean(dailyActivities$steps, na.rm=T)
+median_steps = median(dailyActivities$steps, na.rm=T)
+```
 
+Mean: `r sprintf("%.2f",mean_steps)` Median: `r sprintf("%.2f",median_steps)` 
 
 ## What is the average daily activity pattern?
+```{r,results='hide',warning=FALSE}
+m = ggplot(activities, aes(interval, steps))
+m + stat_summary(fun.y=mean, colour="darkgreen", geom="line", size=1) +
+    scale_x_continuous(name="Time of the day", breaks=seq(0, 2400, 200), 
+                       labels=paste(sprintf("%02d",seq(from=0, to=24, by=2)), "00", sep=":")) + 
+    ylab("Steps (Average)") + 
+    ggtitle("Average daily activity") + 
+    theme(plot.title = element_text(lineheight=0.9, face="bold", size=16)) 
+```
 
+```{r}
+library(stringr)
 
+intervalActivities = aggregate(steps ~ interval, activities, mean)
+highActivity = head(intervalActivities[order(-intervalActivities$steps),], 1)$interval
+hour=highActivity %/% 100
+minute=highActivity %% 100
+
+maxNumOfStepsInterval = paste(str_pad(hour, 2, pad="0"), str_pad(minute, 2, pad="0"), sep=":")
+```
+
+5-minute interval with max number of steps in average: ```r maxNumOfStepsInterval```
 
 ## Imputing missing values
+```{r}
+missingValues = is.na(activities$steps)
+amountMissingValues = sum(missingValues)
+```
 
+```{r}
+activitiesStepNA = subset(activities, subset=missingValues)
+activitiesNAStepAverage = merge(activitiesStepNA, intervalActivities, by.x="interval", by.y="interval")
+activitiesStepAverage = subset(activitiesNAStepAverage, select=c(interval, steps.y, date))
+activitiesMissingDataFilled = merge(activities, activitiesStepAverage, by=c("date", "interval"), all.x=T)
 
+activitiesMissingDataFilled[missingValues,]$steps = floor(activitiesMissingDataFilled[missingValues,]$steps.y)
+
+dailyActivities = aggregate(steps ~ date, activitiesMissingDataFilled, sum)
+m = ggplot(dailyActivities, aes(steps))
+m + geom_histogram(binwidth=1500, fill="darkgreen", color="black") + 
+    ggtitle("Daily steps distribution\n(missing steps replaced by average of interval)") + 
+    theme(plot.title = element_text(lineheight=0.9, face="bold", size=16)) + 
+    scale_y_continuous(name="Count", breaks=0:18*1) +
+    scale_x_continuous(name="Steps", breaks=0:24000*3000)
+```
+
+```{r,echo=FALSE}
+mean_steps_noNA = mean(dailyActivities$steps, na.rm=T)
+median_steps_noNA = median(dailyActivities$steps, na.rm=T)
+```
+
+Mean: `r sprintf("%.2f",mean_steps_noNA)` Median: `r sprintf("%.2f",median_steps_noNA)` 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r,results='hide', fig.height=12}
+Sys.setlocale("LC_TIME", "en_US.UTF-8")
+activitiesMissingDataFilled$weekday = 
+  factor(
+      ifelse(weekdays(activitiesMissingDataFilled$date) %in% c("Saturday", "Sunday"), 
+             "weekend", "weekday"))
+
+m = ggplot(activitiesMissingDataFilled, aes(interval, steps))
+m + stat_summary(fun.y=mean, colour="darkgreen", geom="line", size=1) +
+  scale_x_continuous(name="Time of the day", breaks=seq(0, 2400, 200), 
+                     labels=paste(sprintf("%02d",seq(from=0, to=24, by=2)), "00", sep=":")) + 
+  ylab("Steps (Average)") + 
+  ggtitle("Average daily activity") + 
+  theme(plot.title = element_text(lineheight=0.9, face="bold", size=16)) +
+  facet_wrap(~ weekday, nrow=2, ncol=1) + 
+  theme(strip.text.x = element_text(size = 14))
+```
